@@ -14,6 +14,7 @@ namespace APIExtractor
     {
         private const string CommaSeparator = ", ";
         private static List<Spell> Spells = new List<Spell>();
+        private static List<Quest> Quests = new List<Quest>();
 
         static void Main(string[] args)
         {
@@ -21,10 +22,18 @@ namespace APIExtractor
 
             Console.WriteLine("Starting...");
             Console.WriteLine($"KeyCount: { Settings.APIKey.Count() }");
-            Console.ReadKey();
 
-            ReadSpellAPI();
-            WriteAPISpellSQL();
+            if (Settings.QuestAPI)
+            {
+                ReadQuestAPI();
+                WriteAPIQuestSQL();
+            }
+
+            if (Settings.SpellAPI)
+            {
+                ReadSpellAPI();
+                WriteAPISpellSQL();
+            }
 
             var endTime = DateTime.Now;
             var span = endTime.Subtract(startTime);
@@ -72,6 +81,45 @@ namespace APIExtractor
             });
         }
 
+        public static void ReadQuestAPI()
+        {
+            uint key = 0;
+            uint keyCounter = 0;
+            uint counter = 0;
+
+            Parallel.For(1, 50000, i =>
+            {
+                ++counter;
+                ++keyCounter;
+                if (keyCounter >= 25000)
+                {
+                    ++key;
+                    keyCounter = 0;
+                }
+
+                using (WebClient webClient = new WebClient())
+                {
+                    try
+                    {
+                        string downloadString = "https://us.api.battle.net/wow/quest/";
+                        string locale = $"locale={ Settings.Locale }";
+                        string apiKey = $"apikey={ Settings.APIKey[key] }";
+
+                        string compiledString = $"{ downloadString }{ i }?{ apiKey }&{ locale }";
+                        string value = webClient.DownloadString(compiledString);
+
+                        Quest questInfo = JsonConvert.DeserializeObject<Quest>(value);
+                        Quests.Add(questInfo);
+
+                        Console.WriteLine($"Count: { counter } Key: { Settings.APIKey[key] } KeyCount: { keyCounter } QuestID: { questInfo.id }");
+                    }
+                    catch (Exception /*ex*/)
+                    {
+                    }
+                }
+            });
+        }
+
         public static void WriteAPISpellSQL()
         {
             StreamWriter sql = File.CreateText("spell_api.sql");
@@ -98,7 +146,45 @@ namespace APIExtractor
                     query.Append(";");
                     query.Append(Environment.NewLine);
                     query.Append(InsertBuild(tableName, fieldsName));
+                    count = 0;
+                }
+
+                ++count;
+                query.Append(Environment.NewLine);
+            }
+
+            query.ReplaceLast(',', ';');
+
+            sql.WriteLine(query.ToString());
+            sql.Close();
+        }
+
+        public static void WriteAPIQuestSQL()
+        {
+            StreamWriter sql = File.CreateText("quest_api.sql");
+            string tableName = "quest_api";
+            string[] fieldsName = { "id", "title", "reqLevel", "suggestedPartyMembers", "category", "level" };
+
+            sql.WriteLine(InsertBuild(tableName, fieldsName));
+
+            var count = 0;
+            StringBuilder query = new StringBuilder();
+
+            foreach (Quest questInfo in Quests)
+            {
+                if (questInfo == null)
+                    continue;
+
+                query.Append($"({ questInfo.id }, '{ EscapeString(questInfo.title) }', { questInfo.reqLevel }, { questInfo.suggestedPartyMembers }, ");
+                query.Append($"'{ EscapeString(questInfo.category) }', { questInfo.level })");
+
+                if (count < 500)
+                    query.Append(",");
+                else
+                {
+                    query.Append(";");
                     query.Append(Environment.NewLine);
+                    query.Append(InsertBuild(tableName, fieldsName));
                     count = 0;
                 }
 
