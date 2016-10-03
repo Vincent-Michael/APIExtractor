@@ -61,9 +61,7 @@ namespace APIExtractor
                         string value = webClient.DownloadString(compiledString);
 
                         Spell spellInfo = JsonConvert.DeserializeObject<Spell>(value);
-
-                        if (spellInfo != null)
-                            Spells.Add(spellInfo);
+                        Spells.Add(spellInfo);
 
                         Console.WriteLine($"Count: { counter } Key: { Settings.APIKey[key] } KeyCount: { keyCounter } SpellID: { spellInfo.id }");
                     }
@@ -85,8 +83,11 @@ namespace APIExtractor
             var count = 0;
             StringBuilder query = new StringBuilder();
 
-            foreach (Spell spellInfo in Spells.OrderBy(spell => spell.id))
+            foreach (Spell spellInfo in Spells)
             {
+                if (spellInfo == null)
+                    continue;
+
                 query.Append($"({ spellInfo.id }, '{ EscapeString(spellInfo.name) }', '{ EscapeString(spellInfo.icon) }', '{ EscapeString(spellInfo.description) }', ");
                 query.Append($"'{ EscapeString(spellInfo.powerCost) }', '{ EscapeString(spellInfo.castTime) }', '{ EscapeString(spellInfo.cooldown) }')");
 
