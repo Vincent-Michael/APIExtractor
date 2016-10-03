@@ -54,8 +54,6 @@ namespace APIExtractor
                 {
                     // Get the mapped configuration file
                     var config = ConfigurationManager.OpenExeConfiguration(configPath);
-
-
                     settings = ((AppSettingsSection)config.GetSection("appSettings")).Settings;
                 }
                 catch (Exception ex)

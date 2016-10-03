@@ -12,16 +12,16 @@ namespace APIExtractor
 {
     public static class Program
     {
-        static string apiKey = $"apikey={ Settings.APIKey }";
         private const string CommaSeparator = ", ";
-
-        public static List<Spell> Spells = new List<Spell>();
+        private static List<Spell> Spells = new List<Spell>();
 
         static void Main(string[] args)
         {
             var startTime = DateTime.Now;
 
             Console.WriteLine("Starting...");
+            Console.WriteLine($"KeyCount: { Settings.APIKey.Count() }");
+            Console.ReadKey();
 
             ReadSpellAPI();
             WriteAPISpellSQL();
@@ -35,21 +35,37 @@ namespace APIExtractor
 
         public static void ReadSpellAPI()
         {
+            uint key = 0;
+            uint keyCounter = 0;
+            uint counter = 0;
+
             Parallel.For(1, 250000, i =>
             {
+                ++counter;
+                ++keyCounter;
+                if (keyCounter >= 25000)
+                {
+                    ++key;
+                    keyCounter = 0;
+                }
+
                 using (WebClient webClient = new WebClient())
                 {
                     try
                     {
                         string downloadString = "https://us.api.battle.net/wow/spell/";
                         string locale = $"locale={ Settings.Locale }";
+                        string apiKey = $"apikey={ Settings.APIKey[key] }";
+
                         string compiledString = $"{ downloadString }{ i }?{ apiKey }&{ locale }";
                         string value = webClient.DownloadString(compiledString);
 
                         Spell spellInfo = JsonConvert.DeserializeObject<Spell>(value);
-                        Spells.Add(spellInfo);
 
-                        Console.WriteLine($"( ID: { spellInfo.id }, Name: '{ spellInfo.name }' Icon: '{ spellInfo.icon }' Description: '{ spellInfo.description }' PowerCost: '{ spellInfo.powerCost }' CastTime: '{ spellInfo.castTime }'  Cooldown: '{ spellInfo.cooldown }')");
+                        if (spellInfo != null)
+                            Spells.Add(spellInfo);
+
+                        Console.WriteLine($"Count: { counter } Key: { Settings.APIKey[key] } KeyCount: { keyCounter } SpellID: { spellInfo.id }");
                     }
                     catch (Exception /*ex*/)
                     {
@@ -69,7 +85,7 @@ namespace APIExtractor
             var count = 0;
             StringBuilder query = new StringBuilder();
 
-            foreach (Spell spellInfo in Spells.OrderBy(t => t.id))
+            foreach (Spell spellInfo in Spells.OrderBy(spell => spell.id))
             {
                 query.Append($"({ spellInfo.id }, '{ EscapeString(spellInfo.name) }', '{ EscapeString(spellInfo.icon) }', '{ EscapeString(spellInfo.description) }', ");
                 query.Append($"'{ EscapeString(spellInfo.powerCost) }', '{ EscapeString(spellInfo.castTime) }', '{ EscapeString(spellInfo.cooldown) }')");
@@ -79,6 +95,7 @@ namespace APIExtractor
                 else
                 {
                     query.Append(";");
+                    query.Append(Environment.NewLine);
                     query.Append(InsertBuild(tableName, fieldsName));
                     query.Append(Environment.NewLine);
                     count = 0;
@@ -130,7 +147,7 @@ namespace APIExtractor
         public static string EscapeString(string str)
         {
             if (str == null)
-                return str;
+                return string.Empty;
 
             return MySqlHelper.DoubleQuoteString(str);
         }
